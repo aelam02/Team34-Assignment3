@@ -82,7 +82,7 @@ assign zero = (d2 == 0);
 assign nzero = (d2 != 0);
 assign neg = (d2 < 0);
 assign nneg = (d2 >= 0);
-assign pendpush = (ir2 `OP == `OPlhi) || (ir2 `OP == `OPllo) || (ir2 `OP == `OPshr) ||
+assign pendpush = (ir2 `PUSHBIT);
 
 //reset
 always @(reset) begin
