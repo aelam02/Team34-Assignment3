@@ -8,6 +8,7 @@
 `define INSSET[9:8] //2 bits for type of SRC
 `define SRC[7:4] // 4 Bits for SRC
 `define DEST[3:0] //4 Bits for DEST
+`define PUSHBIT[14] //Bit 14 represents non-reversible instructions
 
 //Bits represnted for Immediate 8 bits
 `define IMMEDAITE[11:4] //8 bits for Immediate value
@@ -20,6 +21,9 @@
 `define INDEX [3:0] //Undo stack index
 
 //Define OPcodes
+//Op values
+`define OPsys  6'b000000
+`define OPcom  6'b000001
 `define OPadd  6'b000010
 `define OPsub  6'b000011
 `define OPxor  6'b000100
@@ -33,21 +37,17 @@
 `define OPjnz  `OPbnz
 `define OPjn   `OPbn
 `define OPjnn  `OPbnn
+`define OPjerr 6'b001110
+`define OPfail 6'b001111
+`define OPland 6'b010000
 `define OPshr  6'b010001
 `define OPor   6'b010010
 `define OPand  6'b010011
 `define OPdup  6'b010100
-`define OPfail 6'b001111
-`define OPxhi  6'b100001
-`define OPxlo  6'b101001
-`define OPlhi  6'b110001
-`define OPllo  6'b111001
-`define OPex2  6'b010101
-
-`define OPjerr 6'b001110
-`define OPland 6'b010000
-`define OPcom  6'b000001
-`define OPsys  6'b000000
+`define OPxhi  6'b100000
+`define OPxlo  6'b101000
+`define OPlhi  6'b110000
+`define OPllo  6'b111000
 
 `define NOP    16'hffff
 
@@ -65,6 +65,8 @@ reg `DATA ustack `USIZE; //Undo stack
 reg `INDEX usp; //Undo stack pointer
 reg `WORD ir; //Instruction Register
 
+reg `WORD pc0, pc1, pc2; //Pipeline PC value
+reg `WORD sext0, sext1, sext2; //Pipeline sign extended
 reg `WORD ir0, ir1, ir2; //Pipeline IR
 reg `WORD d1, d2; //Pipeline destination register
 reg `WORD s1, s2; //Pipeline source
@@ -72,6 +74,7 @@ reg `WORD s1, s2; //Pipeline source
 wire pendjb; //Check for jump/branch
 wire jb; //Is it a jump or branch?
 wire zero, nzero, neg, nneg; //Checks jump/branch conditions
+wire pendpush; //Checks if instruction pushes to undo stack
 
 assign pendjb = (ir2 `OP == `OPjz) || (ir2 `OP == `OPjnz) || (ir2 `OP == `OPjn) || (ir2 `OP == `OPjnn);
 assign jb = (ir2 `INSSET == 1); //1 if branch, 0 if jump
@@ -79,6 +82,7 @@ assign zero = (d2 == 0);
 assign nzero = (d2 != 0);
 assign neg = (d2 < 0);
 assign nneg = (d2 >= 0);
+assign pendpush = (ir2 `OP == `OPlhi) || (ir2 `OP == `OPllo) || (ir2 `OP == `OPshr) ||
 
 //reset
 always @(reset) begin
