@@ -82,6 +82,11 @@ assign nneg = (d2 >= 0);
 
 //reset
 always @(reset) begin
+  halt = 0;
+  pc = 0;
+  ir0 = `NOP;
+  ir1 = `NOP;
+  ir2 = `NOP;
 end
 
 //stage 0: instruction fetch
@@ -94,6 +99,14 @@ end
 
 //stage 2: data memory access
 always @(posedge clk) begin
+  s2 <= datamem[s1];
+  if(ir1 `OP == `OPex) begin
+    d2 <= datamem[s1];
+    datamem[s1] <= d1;
+  end else begin
+    d2 <= d1;
+  end
+  ir2 <= ir1;
 end
 
 //stage 3: ALU op and register write
