@@ -78,6 +78,7 @@ reg `WORD s1, s2; //Pipeline source
 wire pendjb1, pendjb2; //Check for jump/branch
 wire jb; //Is it a jump or branch?
 wire zero, nzero, neg, nneg; //Checks jump/branch conditions
+wire jbtaken; //Is the jump or branch taken?
 wire pendpush; //Checks if instruction pushes to undo stack
 wire datadep; //Checks if there's a data dependency
 
@@ -107,9 +108,15 @@ assign zero = (d2 == 0) && (ir2 `OP == `OPjz);
 assign nzero = (d2 != 0) && (ir2 `OP == `OPjnz);
 assign neg = (d2 < 0) && (ir2 `OP == `OPjn);
 assign nneg = (d2 >= 0) && (ir2 `OP == `OPjnn);
+assign jbtaken = zero || nzero || neg || nneg;
+
+
 assign pendpush = (ir1 `PUSHBIT) && (ir1 `OP != `OPland);
-assign datadep = ((ir0 `DEST == ir1 `DEST) && (~pendjb1))
-|| ((ir0 `DEST == ir2 `DEST) && (~pendjb2)); //Finish this later
+
+assign datadep = ((ir0 `DEST == ir1 `DEST) && (~pendjb1) && (ir0 != `NOP) && (ir1 != `NOP))
+|| ((ir0 `DEST == ir2 `DEST) && (~pendjb2) && (ir0 != `NOP) && (ir2 != `NOP))
+|| ((ir0 `SRC == ir1 `DEST) && (~pendjb1) && (ir0 != `NOP) && (ir1 != `NOP))
+|| ((ir0 `SRC == ir2 `DEST) && (~pendjb2) && (ir0 != `NOP) && (ir2 != `NOP));
 
 //stage 0: instruction fetch
 always @(posedge clk) begin
