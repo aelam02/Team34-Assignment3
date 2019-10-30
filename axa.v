@@ -14,11 +14,16 @@
 `define IMMEDAITE[11:4] //8 bits for Immediate value
 `define IMMOP[15:12] //4 bits for  Op code
 
+//Miscellaneous definitions
 `define STATE[6:0]
 `define REGSIZE [15:0] //According to AXA
 `define MEMSIZE [65536:0]
 `define USIZE [15:0] //Undo stack size
 `define INDEX [3:0] //Undo stack index
+`define RegType    2'b00
+`define I4Type     2'b01
+`define SrcRegType 2'b10
+`define Buffi4Type 2'b11
 
 //Define OPcodes
 //Op values
@@ -60,38 +65,51 @@ reg `DATA datamem `MEMSIZE; //Data memory
 reg `WORD instmem `MEMSIZE; //Instruction memory
 reg `ADDR pc; //Program Counter
 reg `ADDR targetpc, landpc, lc; //Target PC, Landing PC, Current PC
-reg `STATE s; //State
 reg `DATA ustack `USIZE; //Undo stack
 reg `INDEX usp; //Undo stack pointer
 reg `WORD ir; //Instruction Register
 
 reg `WORD pc0, pc1, pc2; //Pipeline PC value
-reg `WORD sext0, sext1, sext2; //Pipeline sign extended
+reg `WORD sext0, sext1; //Pipeline sign extended
 reg `WORD ir0, ir1, ir2; //Pipeline IR
 reg `WORD d1, d2; //Pipeline destination register
 reg `WORD s1, s2; //Pipeline source
 
-wire pendjb; //Check for jump/branch
+wire pendjb1, pendjb2; //Check for jump/branch
 wire jb; //Is it a jump or branch?
 wire zero, nzero, neg, nneg; //Checks jump/branch conditions
 wire pendpush; //Checks if instruction pushes to undo stack
-
-assign pendjb = (ir2 `OP == `OPjz) || (ir2 `OP == `OPjnz) || (ir2 `OP == `OPjn) || (ir2 `OP == `OPjnn);
-assign jb = (ir2 `INSSET == 1); //1 if branch, 0 if jump
-assign zero = (d2 == 0);
-assign nzero = (d2 != 0);
-assign neg = (d2 < 0);
-assign nneg = (d2 >= 0);
-assign pendpush = (ir2 `PUSHBIT);
+wire datadep; //Checks if there's a data dependency
 
 //reset
 always @(reset) begin
-  halt = 0;
-  pc = 0;
-  ir0 = `NOP;
-  ir1 = `NOP;
-  ir2 = `NOP;
+  halt <= 0;
+  pc <= 0;
+  usp <= 0;
+  targetpc <= 0; landpc <= 0; lc <= 0;
+  pc0 <= 0; pc1 <= 0; pc2 <= 0;
+  sext0 <= 0; sext1 <= 10;
+  ir0 <= `NOP; ir1 <= `NOP; ir2 <= `NOP;
+  d1 <= 0; d2 <= 0;
+  s1 <= 0; s2 <= 0;
+  $readmemh0(regfile);
+  $readmemh1(datamem);
+  $readmemh2(instmem);
+  $readmemh3(ustack);
 end
+
+assign pendjb1 = (ir1 `OP == `OPjz) || (ir1 `OP == `OPjnz)
+|| (ir1 `OP == `OPjn) || (ir1 `OP == `OPjnn);
+assign pendjb2 = (ir2 `OP == `OPjz) || (ir2 `OP == `OPjnz)
+|| (ir2 `OP == `OPjn) || (ir2 `OP == `OPjnn);
+assign jb = (ir2 `INSSET == 1); //1 if branch, 0 if jump
+assign zero = (d2 == 0) && (ir2 `OP == `OPjz);
+assign nzero = (d2 != 0) && (ir2 `OP == `OPjnz);
+assign neg = (d2 < 0) && (ir2 `OP == `OPjn);
+assign nneg = (d2 >= 0) && (ir2 `OP == `OPjnn);
+assign pendpush = (ir1 `PUSHBIT) && (ir1 `OP != `OPland);
+assign datadep = ((ir0 `DEST == ir1 `DEST) && (~pendjb1))
+|| ((ir0 `DEST == ir2 `DEST) && (~pendjb2)); //Finish this later
 
 //stage 0: instruction fetch
 always @(posedge clk) begin
@@ -103,14 +121,32 @@ end
 
 //stage 2: data memory access
 always @(posedge clk) begin
-  s2 <= datamem[s1];
   if(ir1 `OP == `OPex) begin
     d2 <= datamem[s1];
     datamem[s1] <= d1;
   end else begin
     d2 <= d1;
   end
+
+  case (ir1 `INSSET)
+    `RegType: begin s2 <= s1; end
+    `I4Type: begin s2 <= sext1; end
+    `SrcRegType: begin s2 <= datamem[s1]; end
+    `Buffi4Type: begin s2 <= ustack[s1[3:0]]; end
+  endcase
+
+  if(pendpush) begin
+    if(usp == 0) begin
+      ustack[usp] <= d1;
+      usp <= usp + 1;
+    end else begin
+      ustack[usp + 1] <= d1;
+      usp <= usp + 1;
+    end
+  end
+  pc2 <= pc1;
   ir2 <= ir1;
+  halt <= 1;
 end
 
 //stage 3: ALU op and register write
