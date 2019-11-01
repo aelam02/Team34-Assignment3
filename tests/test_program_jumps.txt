@@ -1,0 +1,24 @@
+l16 $0, 0x8234
+and $0, 4
+jnn $0, 4
+fail 0b1111
+land
+dup $1, 1$
+sub $1, $0
+jn $1, @$0 ; set datamem[4] to 10
+fail 0b1111
+land
+jerr $3, 0b1010
+xhi $4, 0x01
+xor $4, 4$
+l16 $5, 17
+jnz $4, $5
+fail 0b1111
+land
+shr $4, 5
+ex $6, @$4 ; set datamem[8] to 0
+l16 $9, 22
+jz $6, $9
+fail 0b1111
+land
+sys ; Pushes 9 items onto stack
