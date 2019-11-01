@@ -99,7 +99,7 @@ always @(reset) begin
   $readmemh2(instmem);
   $readmemh3(ustack);
 end
-  
+
 function regscr;
 input `WORD inst;
 regscr = (inst `INSSET == `RegType);
@@ -177,18 +177,18 @@ assign datadep = ((ir0 `DEST == ir1 `DEST) && (~pendjb1) && (ir0 != `NOP) && (ir
 
 //stage 0: instruction fetch
 always @(posedge clk) begin
-  pc0 = (jb ? targetpc : pc);
+  pc0 = (jb ? targetpc : pc); //Should probably be jbtaken?
   if(wait1) begin
     // blocked by stage 1: should not have a jump
     pc <=pc0;
   end else begin
     //not blocked by stage 1:
     ir = instmem[pc0];
-    landpc <= lc; 
+    landpc <= lc;
     lc <= pc;
-    ir0 <= `NOP;
-    if ((ir `OP != `OPjerr) || (ir `OP != `OPland) || (ir `OP != `OPcom) || (ir `OP != `OPfail)) 
-    begin
+    ir0 <= `NOP; //If statement to set ir0 to nop, else set to ir
+    if ((ir `OP != `OPjerr) || (ir `OP != `OPland) || (ir `OP != `OPcom) || (ir `OP != `OPfail))
+    begin //Should be updating s1 in stage 1
         if (regscr(ir)) begin
           s1 <= regfile[ir `SRC]; targetpc <= regfile[ir `SRC];
         end else if (imfour(ir)) begin
@@ -198,17 +198,17 @@ always @(posedge clk) begin
         end else if (atimfour)
           s1 <= ustack[ usp - (ir `SRC)]; targetpc <= ustack[ usp - (ir `SRC)];
         end
-        d1<= regfile[ir `DEST];
+        d1<= regfile[ir `DEST]; //Should be in stage 1
         ir0 <= ir;
     end
     pc <= pc0 + 1;
   end
-  pc1 <= pc0;
+  pc1 <= pc0; //pc0 <= pc; Move pc0 assignment to something else
 end
 
 //stage 1: register read
 always @(posedge clk) begin
-  if ((ir0 != `NOP) && setsdest(ir1) && ((usesdest(ir0) && (ir0 `DEST == ir1 `DEST)) || (usesscr(ir0) && (ir0 `SRC == ir1 `DEST)))) 
+  if ((ir0 != `NOP) && setsdest(ir1) && ((usesdest(ir0) && (ir0 `DEST == ir1 `DEST)) || (usesscr(ir0) && (ir0 `SRC == ir1 `DEST))))
   begin
     // stall waiting for register value
     wait1 = 1;
@@ -217,8 +217,8 @@ always @(posedge clk) begin
     // all good, get operands (even if not needed)
     wait1 = 0;
     d2 <=  regfile[ir0 `DEST];
-    s2 <=  regfile[ir0 `SRC];
-    ir2 <= ir1;
+    s2 <=  regfile[ir0 `SRC]; //Should be setting based on if statement in stage 0
+    ir2 <= ir1; //ir1 <= ir0;
   end
 end
 
@@ -241,7 +241,6 @@ always @(posedge clk) begin
   if(pendpush) begin
     if(usp == 0) begin
       ustack[usp] <= d1;
-      usp <= usp + 1;
     end else begin
       ustack[usp + 1] <= d1;
       usp <= usp + 1;
