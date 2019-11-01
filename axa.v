@@ -253,6 +253,26 @@ end
 
 //stage 3: ALU op and register write
 always @(posedge clk) begin
+  case (ir2 `OP)
+    `OPadd: regfile(ir2 `DEST) <= d2 + s2;
+    `OPsub: regfile(ir2 `DEST) <= d2 - s2;
+    `OPxor: regfile(ir2 `DEST) <= d2 ^ s2;
+    `OPex: regfile(ir2 `DEST) <= d2;
+    `OProl: regfile(ir2 `DEST) <= (d2<<s2)|(d2>>(16-s2));
+    `OPor: regfile(ir2 `DEST) <= d2|s2;
+    `OPand: regfile(ir2 `DEST) <= d2&s2;
+    `OPbz: pc <= pc ;
+    `OPbnz: pc <= pc ;
+    `OPbn: pc <= pc ;
+    `OPbnn: pc <= pc ;
+    `OPshr: regfile(ir2 `DEST) <= d2 >>> s2;
+    `OPdup: regfile(ir2 `DEST) <= s2;
+    `OPxhi: regfile(ir2 `DEST) <= d2 ^ (s2<<8);
+    `OPxlo: regfile(ir2 `DEST) <= d2 ^ s2;
+    `OPlhi: regfile(ir2 `DEST) <= {8'b0, d2[7:0]}|(s2<<8);
+    `OPllo: regfile(ir2 `DEST) <= {d2[15:8], 8'b0}|s2;
+  endcase
+    
 end
 
 endmodule
