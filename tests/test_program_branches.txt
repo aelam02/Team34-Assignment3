@@ -1,0 +1,24 @@
+l16 $0, 0x0001
+sub $0, 1
+bz $0, continue0-.
+fail 0b1111
+continue0: land
+add $0, 7
+add $0, 1
+l16 $1, 0x8000
+xor $0, $1
+bn $0, continue1-.
+fail 0b1111
+continue1: land
+or $2, $0
+shr $2, 7
+shr $2, 7
+com
+bnn $2, continue2-.
+fail 0b1111
+continue2: land
+rol $0, @$2 ; set datamem[2] to 0x0010
+bnz $0, continue3-.
+fail 0b1111
+continue3: land
+sys ; Pushes 10 items onto stack 
