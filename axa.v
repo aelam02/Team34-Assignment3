@@ -139,7 +139,7 @@ always @(posedge clk) begin
     `RegType: begin s2 <= s1; end
     `I4Type: begin s2 <= sext1; end
     `SrcRegType: begin s2 <= datamem[s1]; end
-    `Buffi4Type: begin s2 <= ustack[s1[3:0]]; end
+    `Buffi4Type: begin s2 <= ustack[usp - s1[3:0]]; end
   endcase
 
   if(pendpush) begin
