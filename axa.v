@@ -69,6 +69,7 @@ reg `DATA ustack `USIZE; //Undo stack
 reg `INDEX usp; //Undo stack pointer
 reg `WORD ir; //Instruction Register
 
+reg wait1; //used to stall in stage 1
 reg `WORD pc0, pc1, pc2; //Pipeline PC value
 reg `WORD sext0, sext1; //Pipeline sign extended
 reg `WORD ir0, ir1, ir2; //Pipeline IR
@@ -98,6 +99,60 @@ always @(reset) begin
   $readmemh2(instmem);
   $readmemh3(ustack);
 end
+  
+function regscr;
+input `WORD inst;
+regscr = (inst `INSSET == `RegType);
+endfunction
+
+function imfour;
+input `WORD inst;
+imfour = (inst `INSSET == `I4Type);
+endfunction
+
+function atscr;
+input `WORD inst;
+atscr = (inst `INSSET == `SrcRegType);
+endfunction
+
+function atimfour;
+input `WORD inst;
+atimfour = (inst `INSSET == `Buffi4Type);
+endfunction
+
+function setsdest;
+input `INST inst;
+setsdest = (((inst `OP >= `OPadd) && (inst `OP < `OPjerr)) || ((inst `OP > `OPjerr) && (inst `OP <= `OPllo)));
+endfunction
+
+function usesdest;
+input `INST inst;
+usesdest = ((inst `OP == `OPadd) ||
+          (inst `OP == `OPsub) ||
+          (inst `OP == `OPxor) ||
+          (inst `OP == `OPex) ||
+          (inst `OP == `OProl) ||
+          (inst `OP == `OPshr) ||
+          (inst `OP == `OPor) ||
+          (inst `OP == `OPand) ||
+          (inst `OP == `OPbz) ||
+          (inst `OP == `OPjz) ||
+          (inst `OP == `OPbnz) ||
+          (inst `OP == `OPjnz) ||
+          (inst `OP == `OPbn) ||
+          (inst `OP == `OPjn) ||
+          (inst `OP == `OPbnn) ||
+          (inst `OP == `OPjnn) ||
+          (inst `OP == `OPxhi) ||
+          (inst `OP == `OPxlo) ||
+          (inst `OP == `OPlhi) ||
+          (inst `OP == `OPllo));
+endfunction
+
+function usesscr;
+input `WORD inst;
+usesscr = ((!(inst `WORD)) && (((inst `OP > `OPcomm) && (inst `OP < `OPjerr)) || ((inst `OP > `OPland) && (inst `OP <= `OPllo))));
+endfunction
 
 assign pendjb1 = (ir1 `OP == `OPjz) || (ir1 `OP == `OPjnz)
 || (ir1 `OP == `OPjn) || (ir1 `OP == `OPjnn);
@@ -110,6 +165,8 @@ assign neg = (d2 < 0) && (ir2 `OP == `OPjn);
 assign nneg = (d2 >= 0) && (ir2 `OP == `OPjnn);
 assign jbtaken = zero || nzero || neg || nneg;
 
+// sign-extended i4
+assign sexi4 = {{12{ir[7]}}, (ir `SRC)};
 
 assign pendpush = (ir1 `PUSHBIT) && (ir1 `OP != `OPland);
 
@@ -120,10 +177,49 @@ assign datadep = ((ir0 `DEST == ir1 `DEST) && (~pendjb1) && (ir0 != `NOP) && (ir
 
 //stage 0: instruction fetch
 always @(posedge clk) begin
+  pc0 = (jb ? targetpc : pc);
+  if(wait1) begin
+    // blocked by stage 1: should not have a jump
+    pc <=pc0;
+  end else begin
+    //not blocked by stage 1:
+    ir = instmem[pc0];
+    landpc <= lc; 
+    lc <= pc;
+    ir0 <= `NOP;
+    if ((ir `OP != `OPjerr) || (ir `OP != `OPland) || (ir `OP != `OPcom) || (ir `OP != `OPfail)) 
+    begin
+        if (regscr(ir)) begin
+          s1 <= regfile[ir `SRC]; targetpc <= regfile[ir `SRC];
+        end else if (imfour(ir)) begin
+          s1 <= sexi4; targetpc <= pc + sexi4;
+        end else if (atscr(ir)) begin
+          s1 <= datamem[ regfile[ir `SRC] ]; targetpc <= datamem[ regfile[ir `SRC] ];
+        end else if (atimfour)
+          s1 <= ustack[ usp - (ir `SRC)]; targetpc <= ustack[ usp - (ir `SRC)];
+        end
+        d1<= regfile[ir `DEST];
+        ir0 <= ir;
+    end
+    pc <= pc0 + 1;
+  end
+  pc1 <= pc0;
 end
 
 //stage 1: register read
 always @(posedge clk) begin
+  if ((ir0 != `NOP) && setsdest(ir1) && ((usesdest(ir0) && (ir0 `DEST == ir1 `DEST)) || (usesscr(ir0) && (ir0 `SRC == ir1 `DEST)))) 
+  begin
+    // stall waiting for register value
+    wait1 = 1;
+    ir1 <= `NOP;
+  end else begin
+    // all good, get operands (even if not needed)
+    wait1 = 0;
+    d2 <=  regfile[ir0 `DEST];
+    s2 <=  regfile[ir0 `SRC];
+    ir2 <= ir1;
+  end
 end
 
 //stage 2: data memory access
